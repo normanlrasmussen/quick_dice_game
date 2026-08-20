@@ -47,6 +47,8 @@ type HistoryPoint = {
   rollNumber: number;
   total: number;
   optimalWinPercent: number;
+  optimalTiePercent: number;
+  optimalLossPercent: number;
 };
 
 type LastRoll = {
@@ -485,7 +487,18 @@ function PlayPage() {
   const [total, setTotal] = useState(0);
   const [phase, setPhase] = useState<GamePhase>('playing');
   const [lastRoll, setLastRoll] = useState<LastRoll>(null);
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [history, setHistory] = useState<HistoryPoint[]>(() => {
+    const initialState = stateForTotal(0);
+    return [
+      {
+        rollNumber: 0,
+        total: 0,
+        optimalWinPercent: Number((initialState.optimal.win * 100).toFixed(2)),
+        optimalTiePercent: Number((initialState.optimal.tie * 100).toFixed(2)),
+        optimalLossPercent: Number((initialState.optimal.loss * 100).toFixed(2)),
+      },
+    ];
+  });
   const [statsMode, setStatsMode] = useState(true);
   const [playerTwo, setPlayerTwo] = useState<PlayerTwoResult>(null);
   const [playerTwoReveals, setPlayerTwoReveals] = useState<PlayerTwoReveal[]>([]);
@@ -508,10 +521,19 @@ function PlayPage() {
             : 'Choose the next move';
 
   function resetGame() {
+    const initialState = stateForTotal(0);
     setTotal(0);
     setPhase('playing');
     setLastRoll(null);
-    setHistory([]);
+    setHistory([
+      {
+        rollNumber: 0,
+        total: 0,
+        optimalWinPercent: Number((initialState.optimal.win * 100).toFixed(2)),
+        optimalTiePercent: Number((initialState.optimal.tie * 100).toFixed(2)),
+        optimalLossPercent: Number((initialState.optimal.loss * 100).toFixed(2)),
+      },
+    ]);
     setPlayerTwo(null);
     setPlayerTwoReveals([]);
     setRolling(false);
@@ -523,9 +545,11 @@ function PlayPage() {
     setHistory((items) => [
       ...items,
       {
-        rollNumber: items.length + 1,
+        rollNumber: items.length,
         total: nextTotal,
         optimalWinPercent: Number((nextState.optimal.win * 100).toFixed(2)),
+        optimalTiePercent: Number((nextState.optimal.tie * 100).toFixed(2)),
+        optimalLossPercent: Number((nextState.optimal.loss * 100).toFixed(2)),
       },
     ]);
   }
@@ -616,7 +640,7 @@ function PlayPage() {
           ) : (
             <div>
               <span>Rolls</span>
-              <strong>{history.length}</strong>
+              <strong>{Math.max(0, history.length - 1)}</strong>
             </div>
           )}
         </div>
@@ -782,37 +806,49 @@ function PlayPage() {
             <section className="chart-panel">
               <div className="section-title">
                 <History size={18} />
-                <h3>Win-percentage history</h3>
+                <h3>Outcome-percentage history</h3>
               </div>
-              {history.length > 0 ? (
-                <ResponsiveContainer width="100%" height={210}>
-                  <LineChart data={history} margin={{ left: 2, right: 10, top: 8, bottom: 0 }}>
-                    <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
-                    <XAxis dataKey="rollNumber" tickLine={false} axisLine={false} />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      unit="%"
-                      width={42}
-                      domain={[0, 100]}
-                    />
-                    <Tooltip
-                      formatter={(value) => `${Number(value).toFixed(1)}%`}
-                      labelFormatter={(label) => `Roll ${label}`}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="optimalWinPercent"
-                      stroke="#2f6f68"
-                      strokeWidth={3}
-                      dot={{ r: 4, fill: '#f7f3ea' }}
-                      name="Optimal win"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="empty-history">Roll once to start the trace.</div>
-              )}
+              <ResponsiveContainer width="100%" height={210}>
+                <LineChart data={history} margin={{ left: 2, right: 10, top: 8, bottom: 0 }}>
+                  <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
+                  <XAxis dataKey="rollNumber" tickLine={false} axisLine={false} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    unit="%"
+                    width={42}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip
+                    formatter={(value) => `${Number(value).toFixed(1)}%`}
+                    labelFormatter={(label) => `Roll ${label}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="optimalWinPercent"
+                    stroke="#2f6f68"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#f7f3ea' }}
+                    name="Optimal win"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="optimalTiePercent"
+                    stroke="#b3842f"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#f7f3ea' }}
+                    name="Optimal tie"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="optimalLossPercent"
+                    stroke="#9f4d45"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: '#f7f3ea' }}
+                    name="Optimal loss"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </section>
           </>
         ) : (
