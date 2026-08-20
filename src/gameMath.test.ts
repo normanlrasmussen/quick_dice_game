@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computePlayerTwoChaseOdds,
+  computePlayerTwoLandingDistribution,
+  computeThresholdOdds,
   computeStandOdds,
   oddsSum,
   POLICY,
@@ -36,5 +39,25 @@ describe('dice dynamic programming policy', () => {
     for (let total = 0; total <= 20; total += 1) {
       closeToOne(oddsSum(POLICY[total].roll));
     }
+  });
+
+  it('keeps threshold strategy odds normalized', () => {
+    for (let threshold = 2; threshold <= 21; threshold += 1) {
+      closeToOne(oddsSum(computeThresholdOdds(threshold)));
+    }
+  });
+
+  it('computes deterministic player two chase odds from revealed totals', () => {
+    expect(computePlayerTwoChaseOdds(16, 16)).toEqual({ win: 0, tie: 1, loss: 0 });
+    expect(computePlayerTwoChaseOdds(16, 17)).toEqual({ win: 0, tie: 0, loss: 1 });
+    expect(computePlayerTwoChaseOdds(16, 22)).toEqual({ win: 1, tie: 0, loss: 0 });
+    closeToOne(oddsSum(computePlayerTwoChaseOdds(16, 8)));
+  });
+
+  it('keeps player two landing distributions normalized', () => {
+    const distribution = computePlayerTwoLandingDistribution(16);
+    const totalProbability = distribution.reduce((sum, row) => sum + row.probability, 0);
+
+    closeToOne(totalProbability);
   });
 });
