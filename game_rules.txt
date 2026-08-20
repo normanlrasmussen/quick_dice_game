@@ -1,11 +1,12 @@
 2 Players roll dice aganist eachother. 
 
 Player 1: They roll 2 dice until;
-1) They choose to stand -> Continue
+1) They bust by rolling higher than 21 - Stop and lose
 2) They hit 21 and win -> Stop and win
-3) They bust by rolling higher than 22 - Stop and lose
+3) They choose to stand -> Continue
+
 
 Player 2: They roll 2 dice until
-1) They bust by rolling higher than 22 - Lose
-2) They roll higher than player 1 -> Win
-3) They roll the same as player 1 -> Tie
+1) They bust by rolling higher than 21 - Lose
+2) They roll the same as player 1 -> Tie
+3) They roll higher than player 1 -> Win
