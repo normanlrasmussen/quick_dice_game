@@ -36,6 +36,22 @@ export type SimulationSummary = {
   losses: number;
   simulated: OutcomeOdds;
   exact: OutcomeOdds;
+  p1Totals: DistributionPoint[];
+  p2Totals: DistributionPoint[];
+};
+
+export type DistributionPoint = {
+  value: number;
+  count: number;
+  probability: number;
+  probabilityPercent: number;
+};
+
+export type LandingPoint = {
+  total: number;
+  probability: number;
+  probabilityPercent: number;
+  result: GameResult;
 };
 
 export const DICE_DISTRIBUTION = [
@@ -247,6 +263,75 @@ export function resolvePlayerTwo(playerTotal: number) {
   }
 }
 
+export function computePlayerTwoChaseOdds(
+  playerTotal: number,
+  playerTwoTotal = 0,
+): OutcomeOdds {
+  const memo: Record<number, OutcomeOdds> = {};
+
+  function compute(total: number): OutcomeOdds {
+    if (total > 21) return { win: 1, tie: 0, loss: 0 };
+    if (total === playerTotal) return { win: 0, tie: 1, loss: 0 };
+    if (total > playerTotal) return { win: 0, tie: 0, loss: 1 };
+    if (memo[total]) return memo[total];
+
+    const odds = emptyOdds();
+
+    DICE_DISTRIBUTION.forEach(({ roll, probability }) => {
+      addWeighted(odds, compute(total + roll), probability);
+    });
+
+    memo[total] = odds;
+    return odds;
+  }
+
+  return compute(playerTwoTotal);
+}
+
+export function computePlayerTwoLandingDistribution(
+  playerTotal: number,
+  playerTwoTotal = 0,
+): LandingPoint[] {
+  const memo: Record<number, Record<number, number>> = {};
+
+  function compute(total: number): Record<number, number> {
+    if (total > 21 || total === playerTotal || total > playerTotal) {
+      return { [total]: 1 };
+    }
+
+    if (memo[total]) return memo[total];
+
+    const distribution: Record<number, number> = {};
+
+    DICE_DISTRIBUTION.forEach(({ roll, probability }) => {
+      const child = compute(total + roll);
+
+      Object.entries(child).forEach(([landingTotal, landingProbability]) => {
+        distribution[Number(landingTotal)] =
+          (distribution[Number(landingTotal)] ?? 0) + landingProbability * probability;
+      });
+    });
+
+    memo[total] = distribution;
+    return distribution;
+  }
+
+  return Object.entries(compute(playerTwoTotal))
+    .map(([totalText, probability]) => {
+      const total = Number(totalText);
+      const result: GameResult =
+        total > 21 ? 'win' : total === playerTotal ? 'tie' : 'loss';
+
+      return {
+        total,
+        probability,
+        probabilityPercent: probability * 100,
+        result,
+      };
+    })
+    .sort((a, b) => a.total - b.total);
+}
+
 export function computeThresholdOdds(threshold: number): OutcomeOdds {
   const memo: Record<number, OutcomeOdds> = {};
   const standAt = Math.min(21, Math.max(2, Math.round(threshold)));
@@ -284,15 +369,57 @@ export function playThresholdGame(threshold: number): GameResult {
   return resolvePlayerTwo(playerTotal).result;
 }
 
+function toDistributionPoints(counts: Record<number, number>, games: number) {
+  return Object.entries(counts)
+    .map(([value, count]) => ({
+      value: Number(value),
+      count,
+      probability: count / games,
+      probabilityPercent: (count / games) * 100,
+    }))
+    .sort((a, b) => a.value - b.value);
+}
+
 export function simulateThresholdGames(
   threshold: number,
   games: number,
 ): SimulationSummary {
   const winsAndTies = { wins: 0, ties: 0, losses: 0 };
   const totalGames = Math.min(100000, Math.max(1, Math.round(games)));
+  const p1Counts: Record<number, number> = {};
+  const p2Counts: Record<number, number> = {};
+  const standAt = Math.min(21, Math.max(2, Math.round(threshold)));
 
   for (let game = 0; game < totalGames; game += 1) {
-    const result = playThresholdGame(threshold);
+    let playerTotal = 0;
+    let result: GameResult = 'loss';
+    let playerTwoTotal = 0;
+
+    while (playerTotal < standAt) {
+      playerTotal += rollTwoDice().total;
+
+      if (playerTotal > 21) {
+        result = 'loss';
+        p1Counts[playerTotal] = (p1Counts[playerTotal] ?? 0) + 1;
+        p2Counts[0] = (p2Counts[0] ?? 0) + 1;
+        break;
+      }
+
+      if (playerTotal === 21) {
+        result = 'win';
+        p1Counts[playerTotal] = (p1Counts[playerTotal] ?? 0) + 1;
+        p2Counts[0] = (p2Counts[0] ?? 0) + 1;
+        break;
+      }
+    }
+
+    if (playerTotal >= standAt && playerTotal < 21) {
+      const playerTwo = resolvePlayerTwo(playerTotal);
+      result = playerTwo.result;
+      playerTwoTotal = playerTwo.total;
+      p1Counts[playerTotal] = (p1Counts[playerTotal] ?? 0) + 1;
+      p2Counts[playerTwoTotal] = (p2Counts[playerTwoTotal] ?? 0) + 1;
+    }
 
     if (result === 'win') winsAndTies.wins += 1;
     if (result === 'tie') winsAndTies.ties += 1;
@@ -309,5 +436,7 @@ export function simulateThresholdGames(
       loss: winsAndTies.losses / totalGames,
     },
     exact: computeThresholdOdds(threshold),
+    p1Totals: toDistributionPoints(p1Counts, totalGames),
+    p2Totals: toDistributionPoints(p2Counts, totalGames),
   };
 }

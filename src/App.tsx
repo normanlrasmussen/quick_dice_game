@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   Area,
-  AreaChart,
   Bar,
   CartesianGrid,
   Cell,
@@ -28,7 +27,8 @@ import {
   Target,
 } from 'lucide-react';
 import {
-  DICE_DISTRIBUTION,
+  computePlayerTwoChaseOdds,
+  computePlayerTwoLandingDistribution,
   formatPercent,
   nextRollOutcomes,
   POLICY,
@@ -60,6 +60,7 @@ type PlayerTwoResult = ReturnType<typeof resolvePlayerTwo> | null;
 type PlayerTwoReveal = {
   roll: number;
   total: number;
+  odds: OutcomeOdds;
 };
 
 const decisionText = {
@@ -138,7 +139,6 @@ function OutcomeMosaic({ odds }: { odds: OutcomeOdds }) {
         <div
           className={`outcome-tile ${cell.className}`}
           key={cell.label}
-          style={{ minHeight: `${Math.max(58, cell.value * 220)}px` }}
         >
           <span>{cell.label}</span>
           <strong>{formatPercent(cell.value)}</strong>
@@ -190,9 +190,7 @@ function RulesPage() {
 }
 
 function HowItWorksPage() {
-  const [chartMode, setChartMode] = useState<'stand' | 'roll' | 'combined' | 'optimal'>(
-    'combined',
-  );
+  const [chartMode, setChartMode] = useState<'stand' | 'optimal' | 'both'>('both');
   const [selectedTotal, setSelectedTotal] = useState(16);
   const decisionRows = Object.values(POLICY)
     .filter((state) => state.total <= 21)
@@ -201,29 +199,15 @@ function HowItWorksPage() {
       total: state.total,
       optimalWin: Number((state.optimal.win * 100).toFixed(2)),
       standWin: Number((state.stand.win * 100).toFixed(2)),
-      rollWin: Number((state.roll.win * 100).toFixed(2)),
       standTie: Number((state.stand.tie * 100).toFixed(2)),
       standLoss: Number((state.stand.loss * 100).toFixed(2)),
-      rollTie: Number((state.roll.tie * 100).toFixed(2)),
-      rollLoss: Number((state.roll.loss * 100).toFixed(2)),
       decision: state.decision === 'stand' ? 1 : 0,
     }));
   const selectedState = stateForTotal(selectedTotal);
-  const standWalkRows = DICE_DISTRIBUTION.map(({ roll, probability }) => {
-    const next = roll;
-    return {
-      roll,
-      probability: probability * 100,
-      label:
-        next > selectedTotal
-          ? 'P2 passes'
-          : next === selectedTotal
-            ? 'Tie'
-            : next > 21
-              ? 'P2 busts'
-              : 'Continue',
-    };
-  });
+  const landingRows = useMemo(
+    () => computePlayerTwoLandingDistribution(selectedTotal),
+    [selectedTotal],
+  );
 
   return (
     <main className="content-page">
@@ -273,6 +257,52 @@ function HowItWorksPage() {
         </article>
       </div>
 
+      <section className="chart-panel wide">
+        <div className="section-title split">
+          <div>
+            <Target size={18} />
+            <h2>Notebook strategy charts</h2>
+          </div>
+          <div className="segmented">
+            {(['stand', 'optimal', 'both'] as const).map((mode) => (
+              <button
+                type="button"
+                key={mode}
+                className={chartMode === mode ? 'active' : ''}
+                onClick={() => setChartMode(mode)}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={320}>
+          <ComposedChart data={decisionRows} margin={{ left: 6, right: 12, top: 12, bottom: 0 }}>
+            <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
+            <XAxis dataKey="total" tickLine={false} axisLine={false} />
+            <YAxis tickLine={false} axisLine={false} unit="%" domain={[0, 100]} width={42} />
+            <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
+            {(chartMode === 'stand' || chartMode === 'both') && (
+              <>
+                <Line type="monotone" dataKey="standWin" stroke="#2f6f68" strokeWidth={3} name="Stand win" />
+                <Line type="monotone" dataKey="standTie" stroke="#b3842f" strokeWidth={2} name="Stand tie" />
+                <Line type="monotone" dataKey="standLoss" stroke="#9f4d45" strokeWidth={2} name="Stand loss" />
+              </>
+            )}
+            {(chartMode === 'optimal' || chartMode === 'both') && (
+              <Area
+                type="monotone"
+                dataKey="optimalWin"
+                stroke="#26211b"
+                fill="#26211b1a"
+                strokeWidth={3}
+                name="Optimal win"
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </section>
+
       <section className="notebook-panel">
         <div>
           <p className="eyebrow">Stand calculation</p>
@@ -298,84 +328,17 @@ function HowItWorksPage() {
           <strong>{selectedTotal}</strong>
         </div>
         <OutcomeMosaic odds={selectedState.stand} />
-      </section>
-
-      <section className="chart-panel wide">
-        <div className="section-title split">
+        <div className="landing-list">
+          <h3>Likely Player 2 landing totals</h3>
           <div>
-            <Target size={18} />
-            <h2>Notebook strategy charts</h2>
-          </div>
-          <div className="segmented">
-            {(['stand', 'roll', 'combined', 'optimal'] as const).map((mode) => (
-              <button
-                type="button"
-                key={mode}
-                className={chartMode === mode ? 'active' : ''}
-                onClick={() => setChartMode(mode)}
-              >
-                {mode}
-              </button>
+            {landingRows.map((row) => (
+              <span className={row.result} key={row.total}>
+                <strong>{row.total}</strong>
+                {row.probabilityPercent.toFixed(1)}%
+              </span>
             ))}
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={320}>
-          <ComposedChart data={decisionRows} margin={{ left: 6, right: 12, top: 12, bottom: 0 }}>
-            <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
-            <XAxis dataKey="total" tickLine={false} axisLine={false} />
-            <YAxis tickLine={false} axisLine={false} unit="%" domain={[0, 100]} width={42} />
-            <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
-            {(chartMode === 'stand' || chartMode === 'combined') && (
-              <>
-                <Line type="monotone" dataKey="standWin" stroke="#2f6f68" strokeWidth={3} name="Stand win" />
-                <Line type="monotone" dataKey="standTie" stroke="#b3842f" strokeWidth={2} name="Stand tie" />
-                <Line type="monotone" dataKey="standLoss" stroke="#9f4d45" strokeWidth={2} name="Stand loss" />
-              </>
-            )}
-            {(chartMode === 'roll' || chartMode === 'combined') && (
-              <Line type="monotone" dataKey="rollWin" stroke="#4d5f86" strokeWidth={3} name="Roll win" />
-            )}
-            {(chartMode === 'optimal' || chartMode === 'combined') && (
-              <Area
-                type="monotone"
-                dataKey="optimalWin"
-                stroke="#26211b"
-                fill="#26211b1a"
-                strokeWidth={3}
-                name="Optimal win"
-              />
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </section>
-
-      <section className="chart-panel wide">
-        <div className="section-title">
-          <BarChart3 size={18} />
-          <h2>First Player 2 roll while chasing {selectedTotal}</h2>
-        </div>
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={standWalkRows} margin={{ left: 6, right: 12, top: 12, bottom: 0 }}>
-            <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
-            <XAxis dataKey="roll" tickLine={false} axisLine={false} />
-            <YAxis tickLine={false} axisLine={false} unit="%" width={42} />
-            <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
-            <Bar dataKey="probability" name="Dice probability" radius={[5, 5, 0, 0]}>
-              {standWalkRows.map((row) => (
-                <Cell
-                  key={row.roll}
-                  fill={
-                    row.label === 'P2 passes'
-                      ? '#9f4d45'
-                      : row.label === 'Tie'
-                        ? '#b3842f'
-                        : '#2f6f68'
-                  }
-                />
-              ))}
-            </Bar>
-          </ComposedChart>
-        </ResponsiveContainer>
       </section>
     </main>
   );
@@ -404,6 +367,14 @@ function SimulationPage() {
       exact: Number((summary.exact.loss * 100).toFixed(2)),
     },
   ];
+  const p1DistributionRows = summary.p1Totals.map((row) => ({
+    total: row.value,
+    probability: Number(row.probabilityPercent.toFixed(2)),
+  }));
+  const p2DistributionRows = summary.p2Totals.map((row) => ({
+    total: row.value === 0 ? 'No P2' : row.value,
+    probability: Number(row.probabilityPercent.toFixed(2)),
+  }));
 
   function runSimulation() {
     setSummary(simulateThresholdGames(threshold, games));
@@ -472,6 +443,39 @@ function SimulationPage() {
             <Line dataKey="exact" stroke="#26211b" strokeWidth={3} name="Exact" />
           </ComposedChart>
         </ResponsiveContainer>
+      </section>
+
+      <section className="chart-panel wide">
+        <div className="section-title">
+          <BarChart3 size={18} />
+          <h2>Actual totals seen in the simulation</h2>
+        </div>
+        <div className="distribution-grid">
+          <div>
+            <h3>Player 1 stop totals</h3>
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={p1DistributionRows} margin={{ left: 6, right: 12, top: 12, bottom: 0 }}>
+                <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
+                <XAxis dataKey="total" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} unit="%" width={42} />
+                <Tooltip formatter={(value) => `${Number(value).toFixed(2)}%`} />
+                <Bar dataKey="probability" fill="#2f6f68" name="P1 total" radius={[5, 5, 0, 0]} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div>
+            <h3>Player 2 final totals</h3>
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={p2DistributionRows} margin={{ left: 6, right: 12, top: 12, bottom: 0 }}>
+                <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
+                <XAxis dataKey="total" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} unit="%" width={42} />
+                <Tooltip formatter={(value) => `${Number(value).toFixed(2)}%`} />
+                <Bar dataKey="probability" fill="#b3842f" name="P2 final total" radius={[5, 5, 0, 0]} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </section>
     </main>
   );
@@ -569,7 +573,14 @@ function PlayPage() {
     for (const roll of result.rolls) {
       await sleep(650);
       runningTotal += roll;
-      setPlayerTwoReveals((items) => [...items, { roll, total: runningTotal }]);
+      setPlayerTwoReveals((items) => [
+        ...items,
+        {
+          roll,
+          total: runningTotal,
+          odds: computePlayerTwoChaseOdds(total, runningTotal),
+        },
+      ]);
     }
 
     setPlayerTwo(result);
@@ -639,12 +650,19 @@ function PlayPage() {
             <h2>Player 2 rolls</h2>
             <div>
               {playerTwoReveals.map((item, index) => (
-                <span key={`${item.roll}-${index}`}>
-                  +{item.roll}
-                  <small>{item.total}</small>
-                </span>
+                <article key={`${item.roll}-${index}`}>
+                  <header>
+                    <strong>+{item.roll}</strong>
+                    <span>Total {item.total}</span>
+                  </header>
+                  <div className="p2-odds">
+                    <span className="win">W {formatPercent(item.odds.win, 0)}</span>
+                    <span className="tie">T {formatPercent(item.odds.tie, 0)}</span>
+                    <span className="loss">L {formatPercent(item.odds.loss, 0)}</span>
+                  </div>
+                </article>
               ))}
-              {playerTwoRolling && <span className="pending">...</span>}
+              {playerTwoRolling && <article className="pending">Rolling...</article>}
             </div>
           </section>
         )}
@@ -689,16 +707,6 @@ function PlayPage() {
                 value={formatPercent(state.optimal.win)}
                 detail="Best available move"
                 tone="good"
-              />
-              <StatCard
-                label="Stand win"
-                value={formatPercent(state.stand.win)}
-                detail="Let Player 2 chase"
-              />
-              <StatCard
-                label="Roll win"
-                value={formatPercent(state.roll.win)}
-                detail="Expected future value"
               />
             </div>
 

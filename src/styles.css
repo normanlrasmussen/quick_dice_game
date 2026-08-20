@@ -368,26 +368,61 @@ h3 {
 }
 
 .p2-rolls div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  gap: 10px;
 }
 
-.p2-rolls span {
-  display: inline-grid;
-  place-items: center;
-  min-width: 58px;
-  min-height: 48px;
+.p2-rolls article {
+  display: grid;
+  gap: 10px;
   border-radius: 8px;
-  background: var(--ink);
-  color: #fffaf0;
+  border: 1px solid var(--line);
+  background: #fffdf7;
+  padding: 12px;
+}
+
+.p2-rolls article header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.p2-rolls article header strong {
+  font-size: 1.2rem;
+}
+
+.p2-rolls article header span {
+  color: var(--muted);
   font-weight: 800;
 }
 
-.p2-rolls small {
-  color: #d8cdb8;
-  font-size: 0.72rem;
-  font-weight: 700;
+.p2-odds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.p2-odds span {
+  min-height: 32px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: #fffaf0;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.p2-odds .win {
+  background: var(--green);
+}
+
+.p2-odds .tie {
+  background: var(--gold);
+}
+
+.p2-odds .loss {
+  background: var(--red);
 }
 
 .p2-rolls .pending {
@@ -704,7 +739,7 @@ h3 {
   flex-direction: column;
   justify-content: flex-end;
   gap: 6px;
-  min-height: 70px;
+  min-height: 118px;
   border-radius: 8px;
   padding: 12px;
   color: #fffaf0;
@@ -729,6 +764,51 @@ h3 {
 }
 
 .outcome-tile.loss {
+  background: var(--red);
+}
+
+.landing-list {
+  grid-column: 1 / -1;
+  min-height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf7;
+  padding: 14px;
+}
+
+.landing-list h3 {
+  margin-bottom: 10px;
+}
+
+.landing-list div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 8px;
+}
+
+.landing-list span {
+  display: grid;
+  gap: 3px;
+  min-height: 54px;
+  border-radius: 7px;
+  padding: 9px;
+  color: #fffaf0;
+  font-weight: 800;
+}
+
+.landing-list strong {
+  font-size: 1.1rem;
+}
+
+.landing-list .win {
+  background: var(--green);
+}
+
+.landing-list .tie {
+  background: var(--gold);
+}
+
+.landing-list .loss {
   background: var(--red);
 }
 
@@ -795,6 +875,16 @@ h3 {
   margin-bottom: 14px;
 }
 
+.distribution-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.distribution-grid > div {
+  min-width: 0;
+}
+
 @media (max-width: 980px) {
   .play-grid {
     grid-template-columns: 1fr;
@@ -848,7 +938,8 @@ h3 {
   .rules-grid,
   .explain-flow,
   .notebook-panel,
-  .simulation-controls {
+  .simulation-controls,
+  .distribution-grid {
     grid-template-columns: 1fr;
   }
 
