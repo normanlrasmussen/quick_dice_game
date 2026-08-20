@@ -47,6 +47,8 @@ type HistoryPoint = {
   rollNumber: number;
   total: number;
   optimalWinPercent: number;
+  optimalTiePercent: number;
+  optimalLossPercent: number;
 };
 
 type LastRoll = {
@@ -71,6 +73,18 @@ const decisionText = {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+function buildHistoryPoint(rollNumber: number, total: number): HistoryPoint {
+  const nextState = stateForTotal(total);
+
+  return {
+    rollNumber,
+    total,
+    optimalWinPercent: Number((nextState.optimal.win * 100).toFixed(2)),
+    optimalTiePercent: Number((nextState.optimal.tie * 100).toFixed(2)),
+    optimalLossPercent: Number((nextState.optimal.loss * 100).toFixed(2)),
+  };
+}
 
 function StatCard({
   label,
@@ -494,6 +508,7 @@ function PlayPage() {
 
   const state = stateForTotal(total);
   const nextRollData = useMemo(() => nextRollOutcomes(total), [total]);
+  const historyWithInitial = useMemo(() => [buildHistoryPoint(0, 0), ...history], [history]);
   const canRoll = phase === 'playing' && !rolling && !playerTwoRolling;
   const canStand = phase === 'playing' && total > 0 && total < 21 && !rolling && !playerTwoRolling;
   const statusLabel =
@@ -519,14 +534,9 @@ function PlayPage() {
   }
 
   function recordHistory(nextTotal: number) {
-    const nextState = stateForTotal(nextTotal);
     setHistory((items) => [
       ...items,
-      {
-        rollNumber: items.length + 1,
-        total: nextTotal,
-        optimalWinPercent: Number((nextState.optimal.win * 100).toFixed(2)),
-      },
+      buildHistoryPoint(items.length + 1, nextTotal),
     ]);
   }
 
@@ -695,7 +705,7 @@ function PlayPage() {
 
         {statsMode ? (
           <>
-            <div className="stat-grid">
+            <div className="stat-grid live-stat-grid">
               <StatCard
                 label="Optimal action"
                 value={decisionText[state.decision]}
@@ -782,37 +792,52 @@ function PlayPage() {
             <section className="chart-panel">
               <div className="section-title">
                 <History size={18} />
-                <h3>Win-percentage history</h3>
+                <h3>Outcome-percentage history</h3>
               </div>
-              {history.length > 0 ? (
-                <ResponsiveContainer width="100%" height={210}>
-                  <LineChart data={history} margin={{ left: 2, right: 10, top: 8, bottom: 0 }}>
-                    <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
-                    <XAxis dataKey="rollNumber" tickLine={false} axisLine={false} />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      unit="%"
-                      width={42}
-                      domain={[0, 100]}
-                    />
-                    <Tooltip
-                      formatter={(value) => `${Number(value).toFixed(1)}%`}
-                      labelFormatter={(label) => `Roll ${label}`}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="optimalWinPercent"
-                      stroke="#2f6f68"
-                      strokeWidth={3}
-                      dot={{ r: 4, fill: '#f7f3ea' }}
-                      name="Optimal win"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="empty-history">Roll once to start the trace.</div>
-              )}
+              <ResponsiveContainer width="100%" height={210}>
+                <LineChart data={historyWithInitial} margin={{ left: 2, right: 10, top: 8, bottom: 0 }}>
+                  <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
+                  <XAxis dataKey="rollNumber" tickLine={false} axisLine={false} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    unit="%"
+                    width={42}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip
+                    formatter={(value) => `${Number(value).toFixed(1)}%`}
+                    labelFormatter={(label, payload) => {
+                      const row = payload?.[0]?.payload as HistoryPoint | undefined;
+                      return row ? `Roll ${label} · Total ${row.total}` : `Roll ${label}`;
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="optimalWinPercent"
+                    stroke="#2f6f68"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#f7f3ea' }}
+                    name="Optimal win"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="optimalTiePercent"
+                    stroke="#b3842f"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#f7f3ea' }}
+                    name="Optimal tie"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="optimalLossPercent"
+                    stroke="#9f4d45"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#f7f3ea' }}
+                    name="Optimal loss"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </section>
           </>
         ) : (
