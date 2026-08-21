@@ -44,11 +44,12 @@ type Page = 'play' | 'rules' | 'how' | 'simulation';
 type GamePhase = 'playing' | 'stood' | 'bust' | 'win';
 
 type HistoryPoint = {
-  rollNumber: number;
-  total: number;
-  optimalWinPercent: number;
-  optimalTiePercent: number;
-  optimalLossPercent: number;
+  step: number;
+  label: string;
+  totalLabel: string;
+  winPercent: number;
+  tiePercent: number;
+  lossPercent: number;
 };
 
 type LastRoll = {
@@ -74,16 +75,31 @@ const decisionText = {
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
-function buildHistoryPoint(rollNumber: number, total: number): HistoryPoint {
+function buildOddsHistoryPoint(
+  step: number,
+  label: string,
+  totalLabel: string,
+  odds: OutcomeOdds,
+): HistoryPoint {
+  return {
+    step,
+    label,
+    totalLabel,
+    winPercent: Number((odds.win * 100).toFixed(2)),
+    tiePercent: Number((odds.tie * 100).toFixed(2)),
+    lossPercent: Number((odds.loss * 100).toFixed(2)),
+  };
+}
+
+function buildHistoryPoint(step: number, total: number): HistoryPoint {
   const nextState = stateForTotal(total);
 
-  return {
-    rollNumber,
-    total,
-    optimalWinPercent: Number((nextState.optimal.win * 100).toFixed(2)),
-    optimalTiePercent: Number((nextState.optimal.tie * 100).toFixed(2)),
-    optimalLossPercent: Number((nextState.optimal.loss * 100).toFixed(2)),
-  };
+  return buildOddsHistoryPoint(
+    step,
+    step === 0 ? 'Start' : `P1 ${step}`,
+    `P1 total ${total}`,
+    nextState.optimal,
+  );
 }
 
 function StatCard({
@@ -508,7 +524,33 @@ function PlayPage() {
 
   const state = stateForTotal(total);
   const nextRollData = useMemo(() => nextRollOutcomes(total), [total]);
-  const historyWithInitial = useMemo(() => [buildHistoryPoint(0, 0), ...history], [history]);
+  const outcomeHistory = useMemo(() => {
+    const points = [buildHistoryPoint(0, 0), ...history];
+
+    if (playerTwoRolling || playerTwoReveals.length > 0 || playerTwo) {
+      points.push(
+        buildOddsHistoryPoint(
+          points.length,
+          'Stand',
+          `P1 stands at ${total}`,
+          stateForTotal(total).stand,
+        ),
+      );
+
+      playerTwoReveals.forEach((item, index) => {
+        points.push(
+          buildOddsHistoryPoint(
+            points.length,
+            `P2 ${index + 1}`,
+            `P2 total ${item.total}`,
+            item.odds,
+          ),
+        );
+      });
+    }
+
+    return points;
+  }, [history, playerTwo, playerTwoReveals, playerTwoRolling, total]);
   const canRoll = phase === 'playing' && !rolling && !playerTwoRolling;
   const canStand = phase === 'playing' && total > 0 && total < 21 && !rolling && !playerTwoRolling;
   const statusLabel =
@@ -665,11 +707,13 @@ function PlayPage() {
                     <strong>+{item.roll}</strong>
                     <span>Total {item.total}</span>
                   </header>
-                  <div className="p2-odds">
-                    <span className="win">W {formatPercent(item.odds.win, 0)}</span>
-                    <span className="tie">T {formatPercent(item.odds.tie, 0)}</span>
-                    <span className="loss">L {formatPercent(item.odds.loss, 0)}</span>
-                  </div>
+                  {statsMode && (
+                    <div className="p2-odds">
+                      <span className="win">W {formatPercent(item.odds.win, 0)}</span>
+                      <span className="tie">T {formatPercent(item.odds.tie, 0)}</span>
+                      <span className="loss">L {formatPercent(item.odds.loss, 0)}</span>
+                    </div>
+                  )}
                 </article>
               ))}
               {playerTwoRolling && <article className="pending">Rolling...</article>}
@@ -795,9 +839,9 @@ function PlayPage() {
                 <h3>Outcome-percentage history</h3>
               </div>
               <ResponsiveContainer width="100%" height={210}>
-                <LineChart data={historyWithInitial} margin={{ left: 2, right: 10, top: 8, bottom: 0 }}>
+                <LineChart data={outcomeHistory} margin={{ left: 2, right: 10, top: 8, bottom: 0 }}>
                   <CartesianGrid stroke="#e4ded1" strokeDasharray="4 4" />
-                  <XAxis dataKey="rollNumber" tickLine={false} axisLine={false} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
@@ -807,34 +851,34 @@ function PlayPage() {
                   />
                   <Tooltip
                     formatter={(value) => `${Number(value).toFixed(1)}%`}
-                    labelFormatter={(label, payload) => {
+                    labelFormatter={(_, payload) => {
                       const row = payload?.[0]?.payload as HistoryPoint | undefined;
-                      return row ? `Roll ${label} · Total ${row.total}` : `Roll ${label}`;
+                      return row ? `${row.label} · ${row.totalLabel}` : '';
                     }}
                   />
                   <Line
                     type="monotone"
-                    dataKey="optimalWinPercent"
+                    dataKey="winPercent"
                     stroke="#2f6f68"
                     strokeWidth={3}
                     dot={{ r: 4, fill: '#f7f3ea' }}
-                    name="Optimal win"
+                    name="Win"
                   />
                   <Line
                     type="monotone"
-                    dataKey="optimalTiePercent"
+                    dataKey="tiePercent"
                     stroke="#b3842f"
                     strokeWidth={3}
                     dot={{ r: 4, fill: '#f7f3ea' }}
-                    name="Optimal tie"
+                    name="Tie"
                   />
                   <Line
                     type="monotone"
-                    dataKey="optimalLossPercent"
+                    dataKey="lossPercent"
                     stroke="#9f4d45"
                     strokeWidth={3}
                     dot={{ r: 4, fill: '#f7f3ea' }}
-                    name="Optimal loss"
+                    name="Loss"
                   />
                 </LineChart>
               </ResponsiveContainer>
